@@ -18,6 +18,10 @@
     "./relay": {
       "types": "./src/relay.ts",
       "import": "./src/relay.ts"
+    },
+    "./threadRunner": {
+      "types": "./src/threadRunner.ts",
+      "import": "./src/threadRunner.ts"
     }
   },
   "scripts": {

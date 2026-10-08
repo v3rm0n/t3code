@@ -1,0 +1,30 @@
+{
+  "name": "@t3tools/thread-runner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/main.ts",
+    "build:bundle": "vp pack",
+    "build:image-artifact": "node scripts/build-image-artifact.ts",
+    "spike-check": "node scripts/spike-check.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "@effect/platform-node": "catalog:",
+    "effect": "catalog:",
+    "node-pty": "^1.2.0-beta.15"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-ecs": "3.1143.0",
+    "@aws-sdk/client-lambda-microvms": "3.1143.0",
+    "@effect/vitest": "catalog:",
+    "@t3tools/contracts": "workspace:*",
+    "@types/node": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=24.10"
+  }
+}

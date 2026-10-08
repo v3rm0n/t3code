@@ -40,6 +40,8 @@ export interface ServerDerivedPaths {
   readonly environmentThemesDir: string;
   readonly providerStatusCacheDir: string;
   readonly worktreesDir: string;
+  /** Where projects started from just a name are created. */
+  readonly projectsDir: string;
   readonly attachmentsDir: string;
   /** Screenshots the agent asks the collaborative browser to keep for the user. */
   readonly browserArtifactsDir: string;
@@ -56,6 +58,11 @@ export interface ServerDerivedPaths {
 
 export interface DeriveServerPathsOptions {
   readonly baseDirIsExplicit?: boolean;
+  /**
+   * Directory remote thread VMs mount at the same path. Worktrees, attachments,
+   * and new projects go there so agents in a VM see the same files.
+   */
+  readonly sharedDir?: string | undefined;
 }
 
 /**
@@ -141,7 +148,8 @@ export const deriveServerPaths = Effect.fn(function* (
     devUrl !== undefined && !options.baseDirIsExplicit ? "dev" : "userdata",
   );
   const dbPath = join(stateDir, "statev2.sqlite");
-  const attachmentsDir = join(stateDir, "attachments");
+  const sharedDir = options.sharedDir;
+  const attachmentsDir = join(sharedDir ?? stateDir, "attachments");
   const logsDir = join(stateDir, "logs");
   const providerLogsDir = join(logsDir, "provider");
   const providerStatusCacheDir = join(baseDir, "caches");
@@ -152,7 +160,8 @@ export const deriveServerPaths = Effect.fn(function* (
     settingsPath: join(stateDir, "settings.json"),
     environmentThemesDir: join(stateDir, "themes"),
     providerStatusCacheDir,
-    worktreesDir: join(baseDir, "worktrees"),
+    worktreesDir: join(sharedDir ?? baseDir, "worktrees"),
+    projectsDir: join(sharedDir ?? baseDir, "projects"),
     attachmentsDir,
     browserArtifactsDir: join(stateDir, "browser-artifacts"),
     logsDir,

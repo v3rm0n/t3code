@@ -581,6 +581,7 @@ function makeReplayServerConfig(
       settingsPath: path.join(stateDir, "settings.json"),
       providerStatusCacheDir,
       worktreesDir,
+      projectsDir: path.join(baseDir, "projects"),
       attachmentsDir,
       browserArtifactsDir: path.join(stateDir, "browser-artifacts"),
       environmentThemesDir,

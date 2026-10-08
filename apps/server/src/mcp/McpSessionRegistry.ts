@@ -1,9 +1,11 @@
 import { ProviderInstanceId, ThreadId } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
+import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as SynchronizedRef from "effect/SynchronizedRef";
 import { HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
@@ -103,9 +105,14 @@ const makeWithOptions = Effect.fn("McpSessionRegistry.make")(function* (
   const state = yield* SynchronizedRef.make<RegistryState>({ records: new Map() });
   const currentTimeMillis = options.now ? Effect.sync(options.now) : Clock.currentTimeMillis;
   const livenessWindowMs = options.livenessWindowMs ?? DEFAULT_LIVENESS_WINDOW_MS;
-  const endpoint = NetAddress.isInetAddress(httpServer.address)
-    ? `http://${getHttpMcpEndpointHost(httpServer.address.address)}:${httpServer.address.port}/mcp`
-    : "http://127.0.0.1/mcp";
+  // Providers in remote thread VMs cannot use loopback; the deployment names
+  // an address of this server they can reach.
+  const advertisedEndpoint = yield* Config.String("T3CODE_MCP_ADVERTISED_URL").pipe(Config.option);
+  const endpoint = Option.isSome(advertisedEndpoint)
+    ? advertisedEndpoint.value
+    : NetAddress.isInetAddress(httpServer.address)
+      ? `http://${getHttpMcpEndpointHost(httpServer.address.address)}:${httpServer.address.port}/mcp`
+      : "http://127.0.0.1/mcp";
 
   const hashToken = (token: string) =>
     crypto

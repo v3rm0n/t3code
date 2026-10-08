@@ -31,7 +31,8 @@ import { guardHttpResponseWriteErrors } from "./httpResponseErrorGuard.ts";
 import { fixPath } from "./os-jank.ts";
 import * as Ws from "./ws.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
-import * as NodePtyAdapter from "./terminal/NodePtyAdapter.ts";
+import * as ThreadHost from "./threadHost/ThreadHost.ts";
+import * as ThreadHostPtyAdapter from "./threadHost/ThreadHostPtyAdapter.ts";
 import * as PullRequestHttp from "./pullRequest/http.ts";
 import * as PullRequestProviderRegistry from "./pullRequest/PullRequestProviderRegistry.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
@@ -191,7 +192,10 @@ const layerApplicationObservability = EventLoopMonitor.layer.pipe(
   Layer.provideMerge(layerResourceAttribution),
 );
 
-const layerPtyAdapter = NodePtyAdapter.layer;
+// One thread host for the whole server: terminals and provider adapters share
+// each thread's VM connection.
+const layerThreadHost = ThreadHost.layer;
+const layerPtyAdapter = ThreadHostPtyAdapter.layer.pipe(Layer.provide(layerThreadHost));
 
 const layerServerSettings = ServerSettings.layer.pipe(
   Layer.provide(ServerSecretStore.layer),
@@ -592,6 +596,7 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
 
 const layerRuntimeCoreDependencies = layerRuntimeCoreDependenciesBase.pipe(
   Layer.provideMerge(layerPtyAdapter),
+  Layer.provideMerge(layerThreadHost),
   // Search, prepare, status inspection, and turn launch share one registry
   // cache so every client and provider instance sees the same prepared agents.
   Layer.provideMerge(AcpRegistryCatalog.layer.pipe(Layer.provide(layerServerSettings))),

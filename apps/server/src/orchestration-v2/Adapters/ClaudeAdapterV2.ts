@@ -105,6 +105,8 @@ import {
   shouldPersistProviderEvent,
 } from "../../provider/EventNdjsonLogger.ts";
 import * as ProviderEventLoggers from "../../provider/ProviderEventLoggers.ts";
+import * as ThreadHost from "../../threadHost/ThreadHost.ts";
+import { remoteClaudeSpawner } from "../../threadHost/remoteClaudeSpawn.ts";
 import {
   claudeRateLimitEventToUpdate,
   type ClaudeScopedLimitNames,
@@ -596,6 +598,7 @@ export const layerQueryRunner: Layer.Layer<
   Effect.gen(function* () {
     const crypto = yield* Crypto.Crypto;
     const { native: nativeEventLogger } = yield* ProviderEventLoggers.ProviderEventLoggers;
+    const threadHost = yield* ThreadHost.ThreadHost;
 
     return ClaudeAgentSdkQueryRunner.of({
       allocateSessionId: crypto.randomUUIDv4.pipe(
@@ -618,11 +621,17 @@ export const layerQueryRunner: Layer.Layer<
           ),
           Stream.toAsyncIterable,
         );
+        const options = threadHost.remote
+          ? {
+              ...input.options,
+              spawnClaudeCodeProcess: remoteClaudeSpawner(threadHost, input.threadId),
+            }
+          : input.options;
         const queryRuntime = yield* Effect.try({
           try: () =>
             query({
               prompt,
-              options: input.options,
+              options,
             }),
           catch: (cause) => queryRunnerError(cause, "query"),
         });

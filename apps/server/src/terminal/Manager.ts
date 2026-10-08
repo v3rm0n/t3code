@@ -383,7 +383,8 @@ function snapshot(session: TerminalSessionState): TerminalSessionSnapshot {
     cwd: session.cwd,
     worktreePath: session.worktreePath,
     status: session.status,
-    pid: session.pid,
+    // Clients see only pids of this machine; a remote PTY's pid means nothing here.
+    pid: PtyAdapter.isLocalPid(session.pid) ? session.pid : null,
     history: session.history.value(),
     exitCode: session.exitCode,
     exitSignal: session.exitSignal,
@@ -400,7 +401,7 @@ function summary(session: TerminalSessionState): TerminalSummary {
     cwd: session.cwd,
     worktreePath: session.worktreePath,
     status: session.status,
-    pid: session.pid,
+    pid: PtyAdapter.isLocalPid(session.pid) ? session.pid : null,
     exitCode: session.exitCode,
     exitSignal: session.exitSignal,
     hasRunningSubprocess: session.hasRunningSubprocess,
@@ -2187,6 +2188,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         cols: session.cols,
         rows: session.rows,
         env: spawnEnv,
+        threadId: session.threadId,
       }),
     );
 
@@ -2416,7 +2418,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
     const state = yield* readManagerState;
     const runningSessions = [...state.sessions.values()].filter(
       (session): session is TerminalSessionState & { pid: number } =>
-        session.status === "running" && Number.isInteger(session.pid),
+        session.status === "running" && PtyAdapter.isLocalPid(session.pid),
     );
 
     if (runningSessions.length === 0) {
@@ -3135,7 +3137,7 @@ export const makeWithOptions = Effect.fn("TerminalManager.makeWithOptions")(func
         const running = (yield* sessionsForThread(input.threadId)).filter(
           (session): session is TerminalSessionState & { pid: number } =>
             session.status === "running" &&
-            Number.isInteger(session.pid) &&
+            PtyAdapter.isLocalPid(session.pid) &&
             (input.terminalId === undefined || session.terminalId === input.terminalId),
         );
         if (running.length === 0) return;

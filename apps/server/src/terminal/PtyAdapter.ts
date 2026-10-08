@@ -50,7 +50,13 @@ export interface PtySpawnInput {
   cols: number;
   rows: number;
   env: NodeJS.ProcessEnv;
+  /** The thread the terminal belongs to; remote thread hosts run it in that thread's VM. */
+  threadId?: string;
 }
+
+/** Remote PTYs report negative pids, which local process inspection must skip. */
+export const isLocalPid = (pid: number | null): pid is number =>
+  pid !== null && Number.isInteger(pid) && pid > 0;
 
 /**
  * PtyAdapter - Service tag for PTY process integration.

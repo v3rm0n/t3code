@@ -107,6 +107,8 @@ import {
 } from "../../provider/EventNdjsonLogger.ts";
 import { ProviderEventLoggers } from "../../provider/ProviderEventLoggers.ts";
 import { codexAppServerArgs, resolveCodexLaunchArgs } from "../../provider/codexLaunchArgs.ts";
+import { makeCodexStdio } from "../../threadHost/RemoteProcessViews.ts";
+import * as ThreadHost from "../../threadHost/ThreadHost.ts";
 import { mergeProviderInstanceEnvironment } from "../../provider/ProviderInstanceEnvironment.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import {
@@ -822,6 +824,7 @@ function providerSession(input: {
   readonly cwd: string | null;
   readonly model: string;
   readonly now: DateTime.Utc;
+  readonly capabilities: typeof CodexProviderCapabilitiesV2 | typeof CodexPerThreadCapabilitiesV2;
 }): OrchestrationV2ProviderSession {
   return {
     id: input.providerSessionId,
@@ -830,7 +833,7 @@ function providerSession(input: {
     status: "ready",
     cwd: input.cwd ?? process.cwd(),
     model: input.model,
-    capabilities: CodexProviderCapabilitiesV2,
+    capabilities: input.capabilities,
     createdAt: input.now,
     updatedAt: input.now,
     lastError: null,
@@ -980,6 +983,15 @@ const countTerminalTurnsAfterBoundary = (
   return providerTurns.filter(
     (turn) => turn.ordinal > boundaryTurn.ordinal && isTerminalProviderTurn(turn),
   ).length;
+};
+
+/** For app-servers that serve one thread each (threads in per-thread VMs). */
+const CodexPerThreadCapabilitiesV2 = {
+  ...CodexProviderCapabilitiesV2,
+  sessions: {
+    ...CodexProviderCapabilitiesV2.sessions,
+    supportsMultipleProviderThreadsPerSession: false,
+  },
 };
 
 const resolveCodexForkRollbackTurnCount = Effect.fn("CodexAdapterV2.resolveForkRollbackTurnCount")(
@@ -1302,6 +1314,11 @@ export interface CodexAppServerClientFactoryShape {
     ProviderAdapterOpenSessionError,
     Scope.Scope
   >;
+  /**
+   * False when every thread needs its own app-server, as when threads run in
+   * their own VMs. The adapter then keeps one provider thread per session.
+   */
+  readonly sharedAcrossThreads?: boolean;
 }
 
 export class CodexAppServerClientFactory extends Context.Service<
@@ -1516,51 +1533,113 @@ export const layerAppServerClientFactory: Layer.Layer<
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const { native: nativeEventLogger } = yield* ProviderEventLoggers;
+    const threadHost = yield* ThreadHost.ThreadHost;
 
-    return CodexAppServerClientFactory.of({
-      open: (input) =>
-        Effect.gen(function* () {
-          const scope = yield* Scope.Scope;
-          const environment = {
+    const clientOptionsFor = (input: {
+      readonly threadId: ThreadId;
+      readonly providerSessionId: OrchestrationV2ProviderSession["id"];
+    }): CodexClient.CodexAppServerClientOptions => {
+      const protocolLogger = makeCodexAppServerProtocolLogger({
+        nativeEventLogger,
+        threadId: input.threadId,
+        providerSessionId: input.providerSessionId,
+      });
+      return protocolLogger === undefined
+        ? {}
+        : { logIncoming: true, logOutgoing: true, logger: protocolLogger };
+    };
+
+    // In a thread VM the app-server is the image's `codex`; server-side binary
+    // paths and homes outside the shared directory do not apply there.
+    const openRemote: CodexAppServerClientFactoryShape["open"] = (input) =>
+      Effect.gen(function* () {
+        const remote = yield* threadHost.prepare(input.threadId, {
+          command: "codex",
+          args: codexAppServerArgs(
+            resolveCodexLaunchArgs(input.settings.launchArgs, input.environment),
+          ),
+          env: threadHost.environmentFor({
             ...input.environment,
             ...(input.settings.homePath ? { CODEX_HOME: input.settings.homePath } : {}),
-          };
-          const command = yield* makeCodexAppServerSpawnCommand({
-            command: input.settings.binaryPath || "codex",
-            args: codexAppServerArgs(
-              resolveCodexLaunchArgs(input.settings.launchArgs, input.environment),
+          }),
+        });
+        const stdio = yield* makeCodexStdio(remote);
+        yield* remote.start();
+        yield* Effect.addFinalizer(() =>
+          Effect.tryPromise(() => remote.signal("SIGTERM")).pipe(Effect.ignore),
+        );
+        return yield* CodexClient.make(
+          stdio,
+          clientOptionsFor(input),
+          Effect.promise(() => remote.waitForExit()).pipe(
+            Effect.map(
+              (exit) =>
+                new CodexErrors.CodexAppServerProcessExitedError(
+                  exit.exitCode === null ? {} : { code: exit.exitCode },
+                ),
             ),
-            env: environment,
-          });
-          const handle = yield* spawner.spawn(command).pipe(
-            Effect.provideService(Scope.Scope, scope),
-            Effect.mapError(
-              (cause) =>
-                new ProviderAdapterOpenSessionError({
-                  driver: CODEX_PROVIDER,
-                  providerSessionId: input.providerSessionId,
-                  cause,
-                }),
-            ),
-          );
-          const protocolLogger = makeCodexAppServerProtocolLogger({
-            nativeEventLogger,
-            threadId: input.threadId,
-            providerSessionId: input.providerSessionId,
-          });
-          const clientOptions: CodexClient.CodexAppServerClientOptions =
-            protocolLogger === undefined
-              ? {}
-              : {
-                  logIncoming: true,
-                  logOutgoing: true,
-                  logger: protocolLogger,
-                };
-          const context = yield* Layer.build(CodexClient.layerChildProcess(handle, clientOptions));
-          return yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
-            Effect.provide(context),
-          );
-        }),
+          ),
+        );
+      }).pipe(
+        Effect.mapError(
+          (cause) =>
+            new ProviderAdapterOpenSessionError({
+              driver: CODEX_PROVIDER,
+              providerSessionId: input.providerSessionId,
+              cause,
+            }),
+        ),
+      );
+
+    return CodexAppServerClientFactory.of({
+      sharedAcrossThreads: !threadHost.remote,
+      open: (input) =>
+        threadHost.remote
+          ? openRemote(input)
+          : Effect.gen(function* () {
+              const scope = yield* Scope.Scope;
+              const environment = {
+                ...input.environment,
+                ...(input.settings.homePath ? { CODEX_HOME: input.settings.homePath } : {}),
+              };
+              const command = yield* makeCodexAppServerSpawnCommand({
+                command: input.settings.binaryPath || "codex",
+                args: codexAppServerArgs(
+                  resolveCodexLaunchArgs(input.settings.launchArgs, input.environment),
+                ),
+                env: environment,
+              });
+              const handle = yield* spawner.spawn(command).pipe(
+                Effect.provideService(Scope.Scope, scope),
+                Effect.mapError(
+                  (cause) =>
+                    new ProviderAdapterOpenSessionError({
+                      driver: CODEX_PROVIDER,
+                      providerSessionId: input.providerSessionId,
+                      cause,
+                    }),
+                ),
+              );
+              const protocolLogger = makeCodexAppServerProtocolLogger({
+                nativeEventLogger,
+                threadId: input.threadId,
+                providerSessionId: input.providerSessionId,
+              });
+              const clientOptions: CodexClient.CodexAppServerClientOptions =
+                protocolLogger === undefined
+                  ? {}
+                  : {
+                      logIncoming: true,
+                      logOutgoing: true,
+                      logger: protocolLogger,
+                    };
+              const context = yield* Layer.build(
+                CodexClient.layerChildProcess(handle, clientOptions),
+              );
+              return yield* Effect.service(CodexClient.CodexAppServerClient).pipe(
+                Effect.provide(context),
+              );
+            }),
     });
   }),
 );
@@ -1685,11 +1764,15 @@ export interface CodexAdapterV2Options {
 export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): ProviderAdapterV2Shape {
   const { clientFactory, crypto, fileSystem, idAllocator, serverConfig } = adapterOptions;
   const continuationRequests = adapterOptions.continuationRequests;
+  const capabilities =
+    clientFactory.sharedAcrossThreads === false
+      ? CodexPerThreadCapabilitiesV2
+      : CodexProviderCapabilitiesV2;
 
   return ProviderAdapterV2.of({
     instanceId: adapterOptions.instanceId,
     driver: CODEX_PROVIDER,
-    getCapabilities: () => Effect.succeed(CodexProviderCapabilitiesV2),
+    getCapabilities: () => Effect.succeed(capabilities),
     planSelectionTransition: () => Effect.succeed(turnScopedSelectionTransition()),
     openSession: (input) =>
       Effect.gen(function* () {
@@ -1799,6 +1882,7 @@ export function makeCodexAdapterV2(adapterOptions: CodexAdapterV2Options): Provi
           cwd: input.runtimePolicy.cwd,
           model: input.modelSelection.model,
           now,
+          capabilities,
         });
         const events = yield* Queue.unbounded<ProviderAdapterV2Event>();
         const rateLimitSnapshot = yield* Ref.make<CodexRateLimitSnapshot | undefined>(undefined);

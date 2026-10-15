@@ -25,6 +25,7 @@ import {
 } from "@t3tools/contracts";
 import type { MuseSettings } from "../settings.ts";
 import { AgentScope } from "@t3tools/shared/AgentScope";
+import { applyWrapperCommand } from "@t3tools/shared/cliArgs";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
@@ -1654,9 +1655,13 @@ export const makeMuseAdapterV2 = Effect.fn("makeMuseAdapterV2")(function* (
           options.environment,
           mcpSession,
         );
-        const launch = yield* agentScope.wrap({
+        const wrapped = applyWrapperCommand(options.settings.wrapperCommand, {
           command: options.settings.binaryPath || "muse",
           args: [],
+        });
+        const launch = yield* agentScope.wrap({
+          command: wrapped.command,
+          args: wrapped.args,
           name: "muse",
           threadId: input.threadId,
           env: environment,

@@ -105,6 +105,7 @@ export const makeCodexManagedRuntime = Effect.fn("makeCodexManagedRuntime")(func
         binaryPath: executable.executablePath,
         homePath,
         launchArgs: managedCodexLaunchArgs,
+        wrapperCommand: options.config.wrapperCommand,
       }),
       environment,
       revision: credentials.accessToken,

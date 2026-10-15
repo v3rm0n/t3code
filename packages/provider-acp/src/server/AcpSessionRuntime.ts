@@ -26,6 +26,7 @@ import * as EffectAcpClient from "effect-acp/client";
 import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/compat";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
+import { applyWrapperCommand } from "@t3tools/shared/cliArgs";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 import { AgentScope, AgentScopeThreadId, RAISE_OOM_SCORE_LINE } from "@t3tools/shared/AgentScope";
 import * as HostProcess from "@t3tools/shared/HostProcess";
@@ -85,6 +86,8 @@ const maxStderrChunkLength = 32_768;
 export interface AcpSpawnInput {
   readonly command: string;
   readonly args: ReadonlyArray<string>;
+  /** Runs the agent under another program, such as a sandbox; see `applyWrapperCommand`. */
+  readonly wrapperCommand?: string;
   readonly cwd?: string;
   readonly env?: NodeJS.ProcessEnv;
   readonly extendEnv?: boolean;
@@ -1524,10 +1527,13 @@ export const make = (
         ),
       );
 
+    // The wrapper goes inside the agent scope or cgroup wrapper below, so the
+    // scope still owns everything the sandbox starts.
+    const wrappedSpawn = applyWrapperCommand(options.spawn.wrapperCommand, options.spawn);
     const spawnCommand =
       options.spawn.shell === false
-        ? { command: options.spawn.command, args: options.spawn.args, shell: false }
-        : yield* resolveSpawnCommand(options.spawn.command, options.spawn.args, {
+        ? { command: wrappedSpawn.command, args: wrappedSpawn.args, shell: false }
+        : yield* resolveSpawnCommand(wrappedSpawn.command, wrappedSpawn.args, {
             ...(options.spawn.env ? { env: options.spawn.env } : {}),
             extendEnv: options.spawn.extendEnv ?? true,
           });

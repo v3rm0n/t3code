@@ -150,6 +150,14 @@ Cursor's executable is `cursor-agent`, although its login command is
 `agent login`. Codex connected through ChatGPT and Antigravity can use their
 managed runtimes without a `PATH` entry.
 
+**Wrapper command** runs a provider's agent sessions under another program,
+such as the [nono](https://nono.sh) sandbox. Version checks, updates, sign-in,
+and text generation still run the provider binary directly, so the provider card
+keeps showing the real version and **Update now** keeps working. Cursor has no
+process to wrap, and an OpenCode **Server URL** that T3 Code did not start is
+left alone. See [Run Claude in a sandbox](./providers-claude.md#run-claude-in-a-sandbox)
+for an example.
+
 T3 Code warns when a provider version has known compatibility problems with your
 release. Check **Settings → Providers** on that environment for the recommended
 version or range. When its package manager supports installing a specific version,

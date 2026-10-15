@@ -99,6 +99,24 @@ describe("buildGrokAcpSpawnInput", () => {
     );
     expect(spawn.args).toEqual(["--permission-mode", "default", "agent", "stdio"]);
   });
+
+  it("carries a session wrapper command for the ACP runtime to apply", () => {
+    const wrapper = "nono run --profile nolabs-ai/grok --allow-cwd --silent --";
+    const spawn = buildGrokAcpSpawnInput(
+      { binaryPath: "/usr/local/bin/grok" },
+      "/tmp/project",
+      undefined,
+      undefined,
+      wrapper,
+    );
+
+    expect(spawn.command).toBe("/usr/local/bin/grok");
+    expect(spawn.args).toEqual(["agent", "stdio"]);
+    expect(spawn.wrapperCommand).toBe(wrapper);
+    expect(
+      buildGrokAcpSpawnInput({ binaryPath: "grok" }, "/tmp/project").wrapperCommand,
+    ).toBeUndefined();
+  });
 });
 
 describe("isValidGrokReasoningEffortToken", () => {

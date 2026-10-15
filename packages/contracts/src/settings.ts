@@ -539,6 +539,25 @@ export const makeBinaryPathSetting = (fallback: string) =>
     Schema.withDecodingDefault(Effect.succeed(fallback)),
   );
 
+/**
+ * A command that runs the provider's agent process under another program, such
+ * as a sandbox. It applies only where a session process is spawned; version
+ * checks, updates, sign-in, and text generation run the binary directly so the
+ * install stays identifiable.
+ */
+export const makeWrapperCommandSetting = () =>
+  TrimmedString.pipe(
+    Schema.withDecodingDefault(Effect.succeed("")),
+    Schema.annotateKey({
+      title: "Wrapper command",
+      description: "Runs the agent process under another program, such as a sandbox.",
+      providerSettingsForm: {
+        placeholder: "e.g. nono run --allow-cwd --silent --",
+        clearWhenEmpty: "omit",
+      },
+    }),
+  );
+
 export type ProviderSettingsFormControl = "text" | "password" | "textarea" | "switch" | "select";
 
 export interface ProviderSettingsFormOption {
@@ -655,13 +674,14 @@ export const CodexSettings = makeProviderSettingsSchema(
         description: "Additional CLI arguments passed to codex app-server on session start.",
       }),
     ),
+    wrapperCommand: makeWrapperCommandSetting(),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
   {
-    order: ["binaryPath", "homePath", "shadowHomePath", "launchArgs"],
+    order: ["binaryPath", "homePath", "shadowHomePath", "launchArgs", "wrapperCommand"],
   },
 );
 export type CodexSettings = typeof CodexSettings.Type;
@@ -722,9 +742,10 @@ export const ClaudeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    wrapperCommand: makeWrapperCommandSetting(),
   },
   {
-    order: ["binaryPath", "homePath", "autoCompactWindow", "launchArgs"],
+    order: ["binaryPath", "homePath", "autoCompactWindow", "launchArgs", "wrapperCommand"],
   },
 );
 export type ClaudeSettings = typeof ClaudeSettings.Type;
@@ -802,12 +823,15 @@ export const AntigravitySettings = makeProviderSettingsSchema(
         providerSettingsForm: { placeholder: "Automatic", clearWhenEmpty: "persist" },
       }),
     ),
+    wrapperCommand: makeWrapperCommandSetting(),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
-  { order: ["authMethod", "apiKey", "gcpProject", "gcpLocation", "binaryPath"] },
+  {
+    order: ["authMethod", "apiKey", "gcpProject", "gcpLocation", "binaryPath", "wrapperCommand"],
+  },
 );
 export type AntigravitySettings = typeof AntigravitySettings.Type;
 

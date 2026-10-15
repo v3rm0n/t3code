@@ -956,6 +956,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
         const cwd = input.runtimePolicy.cwd ?? host.paths.cwd;
         const connection = yield* runtime.connectToOpenCodeServer({
           binaryPath: options.settings.binaryPath,
+          wrapperCommand: options.settings.wrapperCommand,
           directory: cwd,
           serverUrl: options.settings.serverUrl,
           environment: options.environment,

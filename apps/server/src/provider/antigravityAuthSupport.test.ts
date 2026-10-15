@@ -58,6 +58,20 @@ describe("Antigravity process environment", () => {
     browserCommand: "managed-browser-helper",
   };
 
+  it("carries the session wrapper command for the ACP runtime to apply", () => {
+    const input = {
+      installation: { executablePath: "/release/acp", harnessPath: "/release/harness" },
+      profile,
+      cwd: "/project",
+      baseEnv: { PATH: "/usr/bin" },
+    };
+
+    expect(buildAntigravityAcpSpawnInput(input).wrapperCommand).toBeUndefined();
+    expect(
+      buildAntigravityAcpSpawnInput({ ...input, wrapperCommand: "nono run --allow-cwd --" }),
+    ).toMatchObject({ command: "/release/acp", wrapperCommand: "nono run --allow-cwd --" });
+  });
+
   it("isolates the profile and harness after merging overrides without changing the base environment", () => {
     const baseEnv = {
       HOME: "/home/developer",

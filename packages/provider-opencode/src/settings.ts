@@ -8,6 +8,7 @@ import {
   CustomModelSetting,
   makeBinaryPathSetting,
   makeProviderSettingsSchema,
+  makeWrapperCommandSetting,
   TrimmedString,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -54,13 +55,15 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    // Applies to the server T3 Code spawns; an external Server URL is left alone.
+    wrapperCommand: makeWrapperCommandSetting(),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
   {
-    order: ["binaryPath", "serverUrl", "serverPassword"],
+    order: ["binaryPath", "serverUrl", "serverPassword", "wrapperCommand"],
   },
 );
 export type OpenCodeSettings = typeof OpenCodeSettings.Type;

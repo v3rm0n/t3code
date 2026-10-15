@@ -25,6 +25,7 @@
  */
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { AgentScope } from "@t3tools/shared/AgentScope";
+import { applyWrapperCommand } from "@t3tools/shared/cliArgs";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import { readToolOutputImage } from "@t3tools/shared/toolOutput";
 import * as Predicate from "effect/Predicate";
@@ -547,9 +548,13 @@ export const makePiAdapterV2 = Effect.fn("makePiAdapterV2")(function* (
         extensionPath,
         runtimeMode: input.runtimePolicy.runtimeMode,
       });
-      const scopedLaunch = yield* agentScope.wrap({
+      const wrappedLaunch = applyWrapperCommand(options.settings.wrapperCommand, {
         command: options.settings.binaryPath || "pi",
         args: launch.args,
+      });
+      const scopedLaunch = yield* agentScope.wrap({
+        command: wrappedLaunch.command,
+        args: wrappedLaunch.args,
         name: "pi",
         threadId: input.threadId,
         env: launch.env,

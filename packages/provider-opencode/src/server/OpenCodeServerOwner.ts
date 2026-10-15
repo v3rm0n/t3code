@@ -29,6 +29,7 @@ export class OpenCodeServerOwner extends Context.Service<
 /** Owns the lazy local OpenCode server shared by one provider instance. */
 export const make = Effect.fn("OpenCodeServerOwner.make")(function* (input: {
   readonly binaryPath: string;
+  readonly wrapperCommand?: string;
   readonly directory: string;
   readonly serverPassword?: string;
   readonly environment?: NodeJS.ProcessEnv;
@@ -102,6 +103,9 @@ export const make = Effect.fn("OpenCodeServerOwner.make")(function* (input: {
               runtime
                 .startOpenCodeServerProcess({
                   binaryPath: input.binaryPath,
+                  ...(input.wrapperCommand !== undefined
+                    ? { wrapperCommand: input.wrapperCommand }
+                    : {}),
                   directory: input.directory,
                   ...(input.serverPassword !== undefined
                     ? { serverPassword: input.serverPassword }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseCliArgs, tokenizeCliArgs } from "./cliArgs.ts";
+import { applyWrapperCommand, parseCliArgs, tokenizeCliArgs } from "./cliArgs.ts";
 
 describe("tokenizeCliArgs", () => {
   it("preserves quoted values and escaped spaces", () => {
@@ -157,6 +157,44 @@ describe("parseCliArgs", () => {
     ).toEqual({
       flags: { "github-output": null, root: "/path" },
       positionals: ["1.2.3"],
+    });
+  });
+});
+
+describe("applyWrapperCommand", () => {
+  const launch = { command: "/opt/claude/bin/claude", args: ["--output-format", "stream-json"] };
+
+  it("returns the launch unchanged without a wrapper", () => {
+    expect(applyWrapperCommand(undefined, launch)).toBe(launch);
+    expect(applyWrapperCommand("", launch)).toBe(launch);
+    expect(applyWrapperCommand("   ", launch)).toBe(launch);
+  });
+
+  it("puts the wrapper in front of the command and keeps the launch arguments last", () => {
+    expect(
+      applyWrapperCommand("nono run --profile nolabs-ai/claude --allow-cwd --silent --", launch),
+    ).toEqual({
+      command: "nono",
+      args: [
+        "run",
+        "--profile",
+        "nolabs-ai/claude",
+        "--allow-cwd",
+        "--silent",
+        "--",
+        "/opt/claude/bin/claude",
+        "--output-format",
+        "stream-json",
+      ],
+    });
+  });
+
+  it("tokenizes quoted wrapper arguments like launch arguments", () => {
+    expect(
+      applyWrapperCommand(`"/Applications/My Sandbox/bin/wrap" --name 'agent one'`, launch),
+    ).toEqual({
+      command: "/Applications/My Sandbox/bin/wrap",
+      args: ["--name", "agent one", "/opt/claude/bin/claude", "--output-format", "stream-json"],
     });
   });
 });

@@ -3,13 +3,17 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it as effectIt } from "@effect/vitest";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as PlatformError from "effect/PlatformError";
 import * as TestClock from "effect/testing/TestClock";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpClient from "effect/http/HttpClient";
+import * as ChildProcess from "effect/process/ChildProcess";
+import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
 import { describe, expect, it } from "vite-plus/test";
 
 import * as OpenCodeRuntime from "./OpenCodeRuntime.ts";
@@ -154,6 +158,60 @@ describe("verifyOpenCodeServerVersion", () => {
       expect(error.detail).toBe("Timed out while checking the OpenCode server version.");
       expect(requestSignal?.aborted).toBe(true);
     }).pipe(Effect.provide(TestClock.layer())),
+  );
+});
+
+describe("OpenCode server wrapper command", () => {
+  const spawned: Array<{ command: string; args: ReadonlyArray<string> }> = [];
+  const recordingSpawner = ChildProcessSpawner.make((command) => {
+    if (ChildProcess.isStandardCommand(command)) {
+      spawned.push({ command: command.command, args: command.args });
+    }
+    return Effect.fail(
+      PlatformError.systemError({ _tag: "NotFound", module: "ChildProcess", method: "spawn" }),
+    );
+  });
+
+  effectIt.effect("spawns the local server under the configured wrapper command", () =>
+    Effect.gen(function* () {
+      const runtime = yield* OpenCodeRuntime.OpenCodeRuntime;
+      const exit = yield* runtime
+        .startOpenCodeServerProcess({
+          binaryPath: "/opt/opencode/bin/opencode",
+          wrapperCommand: "nono run --profile nolabs-ai/opencode --allow-cwd --silent --",
+          directory: "/workspace",
+          hostname: "127.0.0.1",
+          port: 4096,
+        })
+        .pipe(Effect.scoped, Effect.exit);
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(spawned).toEqual([
+        {
+          command: "nono",
+          args: [
+            "run",
+            "--profile",
+            "nolabs-ai/opencode",
+            "--allow-cwd",
+            "--silent",
+            "--",
+            "/opt/opencode/bin/opencode",
+            "serve",
+            "--hostname=127.0.0.1",
+            "--port=4096",
+          ],
+        },
+      ]);
+    }).pipe(
+      Effect.provide(
+        OpenCodeRuntime.layer.pipe(
+          Layer.provide(Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, recordingSpawner)),
+          Layer.provide(OpenCodeServerLedger.layerTest),
+          Layer.provideMerge(NodeServices.layer),
+        ),
+      ),
+    ),
   );
 });
 

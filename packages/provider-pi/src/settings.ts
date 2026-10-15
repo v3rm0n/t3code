@@ -8,6 +8,7 @@ import {
   CustomModelSetting,
   makeBinaryPathSetting,
   makeProviderSettingsSchema,
+  makeWrapperCommandSetting,
   TrimmedString,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
@@ -35,13 +36,14 @@ export const PiSettings = makeProviderSettingsSchema(
         providerSettingsForm: { clearWhenEmpty: "omit" },
       }),
     ),
+    wrapperCommand: makeWrapperCommandSetting(),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
   {
-    order: ["binaryPath", "launchArgs"],
+    order: ["binaryPath", "launchArgs", "wrapperCommand"],
   },
 );
 export type PiSettings = typeof PiSettings.Type;

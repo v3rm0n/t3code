@@ -161,13 +161,15 @@ function makeAcpRegistryRuntime(
       const context = yield* Layer.build(
         AcpSessionRuntime.layer({
           ...runtimeInput,
-          spawn:
-            processEnvironment === undefined
-              ? resolved.spawn
-              : {
-                  ...resolved.spawn,
-                  env: { ...resolved.spawn.env, ...processEnvironment },
-                },
+          spawn: {
+            ...resolved.spawn,
+            ...(processEnvironment === undefined
+              ? {}
+              : { env: { ...resolved.spawn.env, ...processEnvironment } }),
+            ...(options.settings.wrapperCommand
+              ? { wrapperCommand: options.settings.wrapperCommand }
+              : {}),
+          },
           ...(options.settings.authMethodId ? { authMethodId: options.settings.authMethodId } : {}),
           customModels: readCustomModelEntries(options.settings.customModels).map(
             (entry) => entry.slug,

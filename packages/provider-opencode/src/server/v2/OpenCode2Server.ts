@@ -143,6 +143,7 @@ export const verifyServer = (client: OpenCodeClient) =>
  */
 export const make = Effect.fn("OpenCode2Server.make")(function* (input: {
   readonly binaryPath: string;
+  readonly wrapperCommand?: string;
   readonly serverUrl: string;
   readonly serverPassword: string;
   readonly directory: string;
@@ -178,6 +179,7 @@ export const make = Effect.fn("OpenCode2Server.make")(function* (input: {
   const password = yield* generatePassword;
   const owner = yield* OpenCodeServerOwner.make({
     binaryPath: input.binaryPath,
+    ...(input.wrapperCommand !== undefined ? { wrapperCommand: input.wrapperCommand } : {}),
     directory: input.directory,
     environment: serverEnvironment(input.environment, password),
     verify: (url) => connectTo(url, password, false).pipe(Effect.flatMap(remember)),

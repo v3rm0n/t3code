@@ -130,3 +130,23 @@ export function parseCliArgs(
 
   return { flags, positionals };
 }
+
+export interface WrappedCommand {
+  readonly command: string;
+  readonly args: ReadonlyArray<string>;
+}
+
+/**
+ * Runs `launch` under a configured wrapper command such as
+ * `nono run --allow-cwd --silent --`, giving `nono run ... -- <command> <args>`.
+ * The wrapper is tokenized like launch arguments and never goes through a
+ * shell. An empty wrapper returns `launch` unchanged.
+ */
+export function applyWrapperCommand(
+  wrapper: string | undefined,
+  launch: WrappedCommand,
+): WrappedCommand {
+  const [command, ...rest] = tokenizeCliArgs(wrapper);
+  if (command === undefined) return launch;
+  return { command, args: [...rest, launch.command, ...launch.args] };
+}

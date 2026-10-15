@@ -114,6 +114,7 @@ const makeCodexConfig = (overrides: Partial<CodexSettings>): CodexSettings => ({
   homePath: "",
   shadowHomePath: "",
   launchArgs: "",
+  wrapperCommand: "",
   customModels: [],
   ...overrides,
 });
@@ -125,6 +126,7 @@ const makeClaudeConfig = (overrides: Partial<ClaudeSettings>): ClaudeSettings =>
   customModels: [],
   launchArgs: "",
   autoCompactWindow: "",
+  wrapperCommand: "",
   ...overrides,
 });
 
@@ -137,6 +139,7 @@ const makeCursorConfig = (overrides: Partial<CursorSettings>): CursorSettings =>
 const makeGrokConfig = (overrides: Partial<GrokSettings>): GrokSettings => ({
   enabled: false,
   binaryPath: "grok",
+  wrapperCommand: "",
   customModels: [],
   ...overrides,
 });
@@ -146,6 +149,7 @@ const makeOpenCodeConfig = (overrides: Partial<OpenCodeSettings>): OpenCodeSetti
   binaryPath: "opencode",
   serverUrl: "",
   serverPassword: "",
+  wrapperCommand: "",
   customModels: [],
   ...overrides,
 });

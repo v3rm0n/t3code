@@ -286,6 +286,19 @@ describe("ClaudeSettings auto-compaction", () => {
   );
 });
 
+describe("ClaudeSettings wrapper command", () => {
+  it("runs the binary directly when no wrapper is configured", () => {
+    expect(decodeClaudeSettings({}).wrapperCommand).toBe("");
+    expect(decodeClaudeSettings({ wrapperCommand: "   " }).wrapperCommand).toBe("");
+  });
+
+  it("keeps a configured wrapper command", () => {
+    expect(
+      decodeClaudeSettings({ wrapperCommand: " nono run --allow-cwd --silent -- " }).wrapperCommand,
+    ).toBe("nono run --allow-cwd --silent --");
+  });
+});
+
 describe("ClientSettings notifications", () => {
   it("requires opt-in when existing settings omit notification preferences", () => {
     expect(decodeClientSettings({}).notificationMode).toBe("off");

@@ -41,6 +41,44 @@ Claude Code's verbose mode can stay enabled when you use Claude for text generat
 thread titles, branch names, commit messages, and pull request descriptions. On a remote connection,
 T3 Code uses the Claude configuration on the connected server.
 
+## Run Claude in a sandbox
+
+Set **Wrapper command** in the Claude provider settings to run each Claude
+session under another program. T3 Code appends the Claude binary and its
+arguments after the wrapper, so end it with `--` when the wrapper expects one.
+Version checks, updates, and sign-in run `claude` directly, which keeps the
+provider card truthful about the installed version.
+
+For [nono](https://nono.sh), pull its Claude pack once on the environment's
+machine so the first session does not wait on the download:
+
+```bash
+nono pull nolabs-ai/claude
+```
+
+Then use this wrapper command:
+
+```
+nono run --profile nolabs-ai/claude --allow-cwd --silent --
+```
+
+- `--allow-cwd` grants the project directory up front. T3 Code starts Claude
+  without a terminal, so nono skips the prompt it would otherwise show and the
+  agent could not write to the project. `--silent` keeps nono's own output out
+  of Claude's stream.
+- Keep **Binary path** pointing at the native `claude` executable. A script entry
+  such as `cli.js` runs through Node, so T3 Code refuses that combination rather
+  than start Claude outside the sandbox.
+- On macOS, follow nono's keychain guidance (`--bypass-protection`) or sign Claude
+  in without the keychain, or Claude cannot read its credentials.
+- With `--block-net` or a network profile, allow T3 Code's server port with
+  `--open-port`, or the agent loses its T3 Code tools.
+- Leave Claude Code's own sandbox off, as nono recommends.
+
+The same setting exists for Codex, Grok, OpenCode, Pi, Muse Code, Antigravity,
+and local ACP agents. Codex under nono also needs `--sandbox danger-full-access`
+in **Launch arguments**, per nono's guidance on nested sandboxes.
+
 ## Compact long conversations
 
 Set **Auto-compact after** in the Claude provider settings to an integer between

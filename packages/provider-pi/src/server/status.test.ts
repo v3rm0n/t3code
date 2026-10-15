@@ -49,6 +49,7 @@ const settings = {
   enabled: true,
   binaryPath: "pi",
   launchArgs: "",
+  wrapperCommand: "",
   customModels: [],
 } as const;
 

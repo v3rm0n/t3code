@@ -4,7 +4,11 @@
  *
  * @module provider-acp-registry/settings
  */
-import { TrimmedString, makeProviderSettingsSchema } from "@t3tools/contracts";
+import {
+  TrimmedString,
+  makeProviderSettingsSchema,
+  makeWrapperCommandSetting,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
@@ -51,6 +55,7 @@ export const AcpRegistrySettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
+    wrapperCommand: makeWrapperCommandSetting(),
     authMethodId: TrimmedString.pipe(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
@@ -70,7 +75,7 @@ export const AcpRegistrySettings = makeProviderSettingsSchema(
     ),
   },
   {
-    order: ["source", "agentId", "commandPath", "authMethodId"],
+    order: ["source", "agentId", "commandPath", "wrapperCommand", "authMethodId"],
   },
 );
 export type AcpRegistrySettings = typeof AcpRegistrySettings.Type;

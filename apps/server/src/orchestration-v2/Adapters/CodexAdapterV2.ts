@@ -34,6 +34,7 @@ import {
 } from "@t3tools/contracts";
 import { SKILL_MENTION_PATTERN } from "@t3tools/shared/composerInlineTokens";
 import { AgentScope } from "@t3tools/shared/AgentScope";
+import { applyWrapperCommand } from "@t3tools/shared/cliArgs";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import {
   COMPUTER_USE_TOOL_SOURCE,
@@ -1546,11 +1547,15 @@ export const layerAppServerClientFactory: Layer.Layer<
             ...codexAppServerEnvironment(input.environment),
             ...(input.settings.homePath ? { CODEX_HOME: input.settings.homePath } : {}),
           };
-          const command = yield* makeCodexAppServerSpawnCommand({
+          const launch = applyWrapperCommand(input.settings.wrapperCommand, {
             command: input.settings.binaryPath || "codex",
             args: codexAppServerArgs(
               resolveCodexLaunchArgs(input.settings.launchArgs, input.environment),
             ),
+          });
+          const command = yield* makeCodexAppServerSpawnCommand({
+            command: launch.command,
+            args: launch.args,
             env: environment,
             threadId: input.threadId,
           }).pipe(Effect.provideService(AgentScope, agentScope));

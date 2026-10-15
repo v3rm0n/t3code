@@ -44,7 +44,7 @@ import type {
 } from "@anthropic-ai/claude-agent-sdk/sdk-tools";
 // @effect-diagnostics-next-line nodeBuiltinImport:off -- the SDK takes a Node ChildProcess for the CLI.
 import * as NodeChildProcess from "node:child_process";
-import { parseCliArgs } from "@t3tools/shared/cliArgs";
+import { applyWrapperCommand, parseCliArgs, tokenizeCliArgs } from "@t3tools/shared/cliArgs";
 import { AgentScope } from "@t3tools/shared/AgentScope";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { applyClaudePromptEffortPrefix } from "@t3tools/shared/model";
@@ -450,6 +450,29 @@ export class ClaudeBackgroundWorkBlocksQueryReplacementError extends Schema.Tagg
   override get message(): string {
     return "Claude is still running background agents or commands, and this model or setting change would end them. Wait for them to finish, or press Stop, then send the message again.";
   }
+}
+
+export class ClaudeWrapperCommandNeedsNativeBinaryError extends Schema.TaggedError<ClaudeWrapperCommandNeedsNativeBinaryError>()(
+  "ClaudeWrapperCommandNeedsNativeBinaryError",
+  { binaryPath: Schema.String },
+) {
+  override get message(): string {
+    return `Wrapper command needs a native Claude executable, but Binary path is ${this.binaryPath}. The Claude SDK runs a script entry through node, which would skip the wrapper. Point Binary path at the claude binary or clear Wrapper command.`;
+  }
+}
+
+/**
+ * A wrapper command only reaches the CLI when the SDK executes the binary
+ * itself. Refusing a script entry keeps a sandbox setting from silently
+ * launching an unsandboxed session.
+ */
+export function claudeWrapperNeedsNativeBinary(
+  settings: Pick<ClaudeSettings, "binaryPath" | "wrapperCommand">,
+): boolean {
+  return (
+    tokenizeCliArgs(settings.wrapperCommand).length > 0 &&
+    CLAUDE_SCRIPT_EXTENSIONS.some((ext) => settings.binaryPath.endsWith(ext))
+  );
 }
 
 export interface ClaudeAgentSdkQueryRunnerShape {
@@ -1114,6 +1137,14 @@ export function makeClaudeQueryOptions(input: {
           ...(typeof querySettings === "object" && querySettings !== null ? querySettings : {}),
           autoCompactWindow: Number(input.settings.autoCompactWindow),
         } as ClaudeSdkSettings);
+  // The SDK spawns a native binary as `path ...executableArgs ...sdkArgs`, so a
+  // wrapper such as a sandbox rides in executableArgs in front of the CLI.
+  const claudeLaunch = input.settings?.binaryPath
+    ? applyWrapperCommand(input.settings.wrapperCommand, {
+        command: input.settings.binaryPath,
+        args: [],
+      })
+    : undefined;
   const options: ClaudeAgentSdkQueryOptions = {
     model: compiledSelection.apiModelId,
     tools: claudeAgentSdkQueryToolsForSdk(selectedTools),
@@ -1154,9 +1185,12 @@ export function makeClaudeQueryOptions(input: {
     ...(input.supportedDialogKinds === undefined
       ? {}
       : { supportedDialogKinds: input.supportedDialogKinds }),
-    ...(input.settings?.binaryPath
-      ? { pathToClaudeCodeExecutable: input.settings.binaryPath }
-      : {}),
+    ...(claudeLaunch === undefined
+      ? {}
+      : {
+          pathToClaudeCodeExecutable: claudeLaunch.command,
+          ...(claudeLaunch.args.length === 0 ? {} : { executableArgs: [...claudeLaunch.args] }),
+        }),
     ...(input.environment === undefined ? {} : { env: input.environment }),
     ...(input.mcpServers === undefined ? {} : { mcpServers: input.mcpServers }),
     systemPrompt: {
@@ -8540,6 +8574,11 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             turnInput.nativeThreadHasTurns ?? turnInput.providerTurnOrdinal > 1;
           const shouldResume =
             resumeSessionAt !== undefined || openedWithResume || hasPersistedProviderTurn;
+          if (claudeWrapperNeedsNativeBinary(adapterOptions.settings)) {
+            return yield* new ClaudeWrapperCommandNeedsNativeBinaryError({
+              binaryPath: adapterOptions.settings.binaryPath,
+            });
+          }
           const queryOptions = makeClaudeQueryOptions({
             modelSelection: turnInput.modelSelection,
             nativeThreadId,

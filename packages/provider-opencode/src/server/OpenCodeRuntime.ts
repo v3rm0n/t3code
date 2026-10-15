@@ -37,6 +37,7 @@ import * as OpenCodeServerLedger from "./OpenCodeServerLedger.ts";
 import { collectStreamAsString } from "@t3tools/provider-core/server/snapshotProbe";
 import * as NetService from "@t3tools/shared/Net";
 import { AgentScope } from "@t3tools/shared/AgentScope";
+import { applyWrapperCommand } from "@t3tools/shared/cliArgs";
 import * as HostProcess from "@t3tools/shared/HostProcess";
 import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
@@ -252,6 +253,8 @@ export class OpenCodeRuntime extends Context.Service<
      */
     readonly startOpenCodeServerProcess: (input: {
       readonly binaryPath: string;
+      /** Runs the server under another program, such as a sandbox. */
+      readonly wrapperCommand?: string;
       readonly directory: string;
       readonly serverPassword?: string;
       readonly environment?: NodeJS.ProcessEnv;
@@ -268,6 +271,8 @@ export class OpenCodeRuntime extends Context.Service<
      */
     readonly connectToOpenCodeServer: (input: {
       readonly binaryPath: string;
+      /** Applies only to a server this process spawns, never to `serverUrl`. */
+      readonly wrapperCommand?: string;
       readonly directory: string;
       readonly serverUrl?: string | null;
       readonly serverPassword?: string;
@@ -709,10 +714,14 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         ));
       const timeoutMs = input.timeoutMs ?? DEFAULT_OPENCODE_SERVER_TIMEOUT_MS;
       const args = ["serve", `--hostname=${hostname}`, `--port=${port}`];
-      // One server runs every session of the instance, so its scope has no thread.
-      const launch = yield* agentScope.wrap({
+      const wrapped = applyWrapperCommand(input.wrapperCommand, {
         command: input.binaryPath,
         args,
+      });
+      // One server runs every session of the instance, so its scope has no thread.
+      const launch = yield* agentScope.wrap({
+        command: wrapped.command,
+        args: wrapped.args,
         name: "opencode",
         env: input.environment,
       });
@@ -929,6 +938,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
 
     return startOpenCodeServerProcess({
       binaryPath: input.binaryPath,
+      ...(input.wrapperCommand !== undefined ? { wrapperCommand: input.wrapperCommand } : {}),
       directory: input.directory,
       ...(input.serverPassword !== undefined ? { serverPassword: input.serverPassword } : {}),
       ...(input.environment !== undefined ? { environment: input.environment } : {}),

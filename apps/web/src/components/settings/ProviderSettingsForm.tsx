@@ -110,7 +110,9 @@ export function deriveProviderSettingsFields(
       const fieldSchema = definition.settingsSchema.fields[key]!;
       const formAnnotation = readProviderSettingsFormAnnotation(fieldSchema);
       if (formAnnotation.hidden) return [];
-      if (isLocalAcp && key !== "source" && key !== "commandPath") return [];
+      if (isLocalAcp && key !== "source" && key !== "commandPath" && key !== "wrapperCommand") {
+        return [];
+      }
 
       const annotatedTitle = readFieldAnnotationString(fieldSchema, "title");
       const annotatedDescription = readFieldAnnotationString(fieldSchema, "description");

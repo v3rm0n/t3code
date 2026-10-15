@@ -100,6 +100,14 @@ Ownership is cached per instance and re-read immediately before an update runs. 
 changed since the advisory, and reports success only when the refreshed provider is still installed
 with a readable, current version.
 
+`binaryPath` is that identity, so the per-instance **Wrapper command** never replaces it. The
+wrapper ([`applyWrapperCommand`](../../packages/shared/src/cliArgs.ts)) applies exactly where
+`AgentScope.wrap` applies to a session process, and inside it, so a systemd scope stays outermost.
+Probes, maintenance, sign-in, and text generation keep spawning the bare binary; wrapping them
+would report the wrapper's version and refuse to update the provider. The Claude SDK runs a script
+entry through node, where `executableArgs` cannot carry the wrapper, so the adapter refuses that
+combination instead of launching unsandboxed.
+
 ## Protocol traps
 
 Codex async questions arrive as notifications and are answered with a new user message. There is

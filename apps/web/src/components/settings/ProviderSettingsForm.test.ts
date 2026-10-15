@@ -17,6 +17,7 @@ describe("ProviderSettingsForm helpers", () => {
       "homePath",
       "shadowHomePath",
       "launchArgs",
+      "wrapperCommand",
     ]);
   });
 
@@ -60,6 +61,7 @@ describe("ProviderSettingsForm helpers", () => {
       "source",
       "agentId",
       "commandPath",
+      "wrapperCommand",
       "authMethodId",
     ]);
   });
@@ -68,7 +70,7 @@ describe("ProviderSettingsForm helpers", () => {
     const acpRegistry = providerClients.get(ProviderDriverKind.make("acpRegistry"));
     expect(
       deriveProviderSettingsFields(acpRegistry!, { source: "local" }).map((field) => field.key),
-    ).toEqual(["source", "commandPath"]);
+    ).toEqual(["source", "commandPath", "wrapperCommand"]);
   });
 
   it("derives a select control with its choices for the Antigravity sign-in method", () => {
@@ -82,6 +84,7 @@ describe("ProviderSettingsForm helpers", () => {
       "gcpProject",
       "gcpLocation",
       "binaryPath",
+      "wrapperCommand",
     ]);
     const authMethod = fields.find((field) => field.key === "authMethod");
     expect(authMethod).toMatchObject({ control: "select", clearWhenEmpty: "omit" });
@@ -103,6 +106,7 @@ describe("ProviderSettingsForm helpers", () => {
       "homePath",
       "autoCompactWindow",
       "launchArgs",
+      "wrapperCommand",
     ]);
   });
 

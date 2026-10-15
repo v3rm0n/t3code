@@ -8,6 +8,7 @@ import {
   CustomModelSetting,
   makeBinaryPathSetting,
   makeProviderSettingsSchema,
+  makeWrapperCommandSetting,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -26,11 +27,12 @@ export const MuseSettings = makeProviderSettingsSchema(
         providerSettingsForm: { placeholder: "muse", clearWhenEmpty: "omit" },
       }),
     ),
+    wrapperCommand: makeWrapperCommandSetting(),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
-  { order: ["binaryPath"] },
+  { order: ["binaryPath", "wrapperCommand"] },
 );
 export type MuseSettings = typeof MuseSettings.Type;

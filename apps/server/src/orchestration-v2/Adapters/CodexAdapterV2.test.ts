@@ -784,6 +784,62 @@ describe("CodexAdapterV2 process spawning", () => {
     }).pipe(Effect.provideService(HostProcess.Platform, "linux")),
   );
 
+  it.effect("runs the app-server under the configured wrapper command", () =>
+    Effect.gen(function* () {
+      const spawned: Array<{ command: string; args: ReadonlyArray<string> }> = [];
+      const spawner = ChildProcessSpawner.make((command) => {
+        if (ChildProcess.isStandardCommand(command)) {
+          spawned.push({ command: command.command, args: command.args });
+        }
+        return Effect.fail(
+          PlatformError.systemError({ _tag: "NotFound", module: "ChildProcess", method: "spawn" }),
+        );
+      });
+      const factory = yield* CodexAdapterV2.CodexAppServerClientFactory.pipe(
+        Effect.provide(CodexAdapterV2.layerAppServerClientFactory),
+        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        Effect.provideService(
+          ProviderEventLoggers.ProviderEventLoggers,
+          ProviderEventLoggers.NoOpProviderEventLoggers,
+        ),
+      );
+      yield* factory
+        .open({
+          instanceId: CodexAdapterV2.CODEX_DEFAULT_INSTANCE_ID,
+          threadId: ThreadId.make("thread-wrapper-command"),
+          providerSessionId: ProviderSessionId.make("provider-session-wrapper-command"),
+          runtimePolicy: ProviderAdapter.ProviderAdapterV2RuntimePolicy.make({
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            cwd: "/workspace",
+          }),
+          settings: {
+            ...DEFAULT_CODEX_SETTINGS,
+            binaryPath: "/opt/codex/bin/codex",
+            wrapperCommand: "nono run --profile nolabs-ai/codex --allow-cwd --silent --",
+          },
+          environment: {},
+        })
+        .pipe(Effect.scoped, Effect.exit);
+
+      assert.deepEqual(spawned, [
+        {
+          command: "nono",
+          args: [
+            "run",
+            "--profile",
+            "nolabs-ai/codex",
+            "--allow-cwd",
+            "--silent",
+            "--",
+            "/opt/codex/bin/codex",
+            "app-server",
+          ],
+        },
+      ]);
+    }).pipe(Effect.provideService(HostProcess.Platform, "linux")),
+  );
+
   it.effect("expands ~ in the configured binary path before spawning", () =>
     Effect.gen(function* () {
       const spawnedCommands: Array<string> = [];

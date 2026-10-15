@@ -168,7 +168,9 @@ export const AntigravityDriver: ProviderDriver<
         );
 
       const makeRuntime = Effect.fn("AntigravityDriver.makeRuntime")(function* (
-        input: Omit<AntigravityAcpRuntimeInput, "spawn" | "childProcessSpawner">,
+        input: Omit<AntigravityAcpRuntimeInput, "spawn" | "childProcessSpawner"> & {
+          readonly wrapperCommand?: string;
+        },
       ): Effect.fn.Return<
         AcpSessionRuntime.AcpSessionRuntime["Service"],
         AcpError | ProviderSetupError,
@@ -241,8 +243,9 @@ export const AntigravityDriver: ProviderDriver<
                 ),
               ),
         );
+        const { wrapperCommand, ...runtimeInput } = input;
         const runtime = yield* makeAntigravityAcpRuntime({
-          ...input,
+          ...runtimeInput,
           authMethod: auth.authMethod,
           childProcessSpawner: spawner,
           spawn: buildAntigravityAcpSpawnInput({
@@ -252,6 +255,7 @@ export const AntigravityDriver: ProviderDriver<
             baseEnv: withAgentDeviceEnvironment(processEnvironment, input),
             auth,
             runtimeTempDirectory,
+            ...(wrapperCommand === undefined ? {} : { wrapperCommand }),
           }),
         }).pipe(Effect.provideService(Crypto.Crypto, crypto));
         return {
@@ -423,7 +427,9 @@ export const AntigravityDriver: ProviderDriver<
       const orchestrationAdapter = yield* makeAntigravityAdapterV2({
         instanceId,
         selfInvocation,
-        makeRuntime,
+        // Only session processes run under the wrapper; sign-in, the catalog
+        // probe, and text generation keep the bare binary.
+        makeRuntime: (input) => makeRuntime({ ...input, wrapperCommand: settings.wrapperCommand }),
         withProcess: authFlow.withProcess,
         defaultModel,
         onSessionStarted: provider.onSessionStarted,

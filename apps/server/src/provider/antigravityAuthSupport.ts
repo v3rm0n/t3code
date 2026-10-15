@@ -445,10 +445,13 @@ export function buildAntigravityAcpSpawnInput(input: {
   readonly auth?: AntigravityAuthConfig;
   /** Per-process temp directory. Defaults to the profile's shared temp directory. */
   readonly runtimeTempDirectory?: string;
+  /** Session processes only; sign-in, catalog, and text generation run bare. */
+  readonly wrapperCommand?: string;
 }): AcpSessionRuntime.AcpSpawnInput {
   return {
     command: input.installation.executablePath,
     args: input.profile.platform === "linux" ? ["--uid="] : [],
+    ...(input.wrapperCommand ? { wrapperCommand: input.wrapperCommand } : {}),
     cwd: input.cwd,
     env: {
       ...antigravityEnvironment(

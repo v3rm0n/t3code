@@ -1160,14 +1160,17 @@ describe("ClaudeAdapterV2 approval cancellation", () => {
   );
 });
 
-// Opens a session with the given configured binary path and environment, runs
-// one turn, and returns the executable paths the SDK was asked to spawn and the
-// CLAUDE_CODE_ENABLE_TODO_TOOLS value it was given.
+// Opens a session with the given configured binary path, environment, and
+// settings, runs one turn, and returns the executable paths and arguments the
+// SDK was asked to spawn, the CLAUDE_CODE_ENABLE_TODO_TOOLS value it was given,
+// and the turn's outcome.
 const captureSdkExecutablePaths = Effect.fn("captureSdkExecutablePaths")(function* (
   binaryPath: string,
   environment: ProviderInstanceEnvironment = [],
+  config: Partial<ClaudeSettings> = {},
 ) {
   const executablePaths: Array<string | undefined> = [];
+  const executableArgs: Array<ReadonlyArray<string> | undefined> = [];
   const taskToolEnvironment: Array<string | undefined> = [];
   const adapter = yield* ClaudeAdapterV2.createClaudeAdapterV2(
     {
@@ -1175,7 +1178,7 @@ const captureSdkExecutablePaths = Effect.fn("captureSdkExecutablePaths")(functio
       displayName: undefined,
       environment,
       enabled: true,
-      config: { ...DEFAULT_CLAUDE_SETTINGS, binaryPath },
+      config: { ...DEFAULT_CLAUDE_SETTINGS, binaryPath, ...config },
     },
     {},
   ).pipe(
@@ -1189,6 +1192,7 @@ const captureSdkExecutablePaths = Effect.fn("captureSdkExecutablePaths")(functio
       open: (input) =>
         Effect.sync(() => {
           executablePaths.push(input.options.pathToClaudeCodeExecutable);
+          executableArgs.push(input.options.executableArgs);
           taskToolEnvironment.push(input.options.env?.CLAUDE_CODE_ENABLE_TODO_TOOLS);
           return {
             messages: Stream.never,
@@ -1218,17 +1222,19 @@ const captureSdkExecutablePaths = Effect.fn("captureSdkExecutablePaths")(functio
     modelSelection: CLAUDE_TEST_MODEL_SELECTION,
     runtimePolicy: CLAUDE_TEST_RUNTIME_POLICY,
   });
-  yield* runtime.startTurn(
-    makeClaudeTestTurnInput({
-      threadId,
-      providerThread,
-      now: yield* DateTime.now,
-      attemptId: RunAttemptId.make("attempt-claude-binary-path"),
-      text: "hello",
-      attachments: [],
-    }),
-  );
-  return { executablePaths, taskToolEnvironment };
+  const started = yield* runtime
+    .startTurn(
+      makeClaudeTestTurnInput({
+        threadId,
+        providerThread,
+        now: yield* DateTime.now,
+        attemptId: RunAttemptId.make("attempt-claude-binary-path"),
+        text: "hello",
+        attachments: [],
+      }),
+    )
+    .pipe(Effect.result);
+  return { executablePaths, executableArgs, taskToolEnvironment, started };
 });
 
 describe("ClaudeAdapterV2 executable path", () => {
@@ -1260,6 +1266,61 @@ describe("ClaudeAdapterV2 executable path", () => {
       }),
     ).pipe(
       Effect.provideService(HostProcess.Environment, testCase.hostEnvironment),
+      Effect.provide(
+        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+      ),
+    ),
+  );
+
+  it.effect("runs the CLI under the configured wrapper command", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { executablePaths, executableArgs, started } = yield* captureSdkExecutablePaths(
+          "/opt/claude/bin/claude",
+          [],
+          { wrapperCommand: "nono run --profile nolabs-ai/claude --allow-cwd --silent --" },
+        );
+
+        assert.equal(started._tag, "Success");
+        assert.deepEqual(executablePaths, ["nono"]);
+        assert.deepEqual(executableArgs, [
+          [
+            "run",
+            "--profile",
+            "nolabs-ai/claude",
+            "--allow-cwd",
+            "--silent",
+            "--",
+            "/opt/claude/bin/claude",
+          ],
+        ]);
+      }),
+    ).pipe(
+      Effect.provide(
+        Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
+      ),
+    ),
+  );
+
+  it.effect("refuses a wrapper command in front of a script entry instead of launching bare", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const { executablePaths, started } = yield* captureSdkExecutablePaths(
+          "/opt/claude/cli.js",
+          [],
+          { wrapperCommand: "nono run --allow-cwd --silent --" },
+        );
+
+        assert.deepEqual(executablePaths, []);
+        assert.equal(started._tag, "Failure");
+        if (started._tag === "Failure") {
+          assert.include(
+            makeProviderFailure({ cause: started.failure, class: "provider_error" }).message,
+            "native Claude executable",
+          );
+        }
+      }),
+    ).pipe(
       Effect.provide(
         Layer.mergeAll(IdAllocator.layer, McpProviderSessions.layer, NodeServices.layer),
       ),

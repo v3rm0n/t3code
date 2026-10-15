@@ -290,6 +290,7 @@ export const OpenCodeDriver: ProviderDriver<
       // One OpenCode 2 server per instance, spawned on first use or reached at `serverUrl`.
       const openCode2Server = yield* OpenCode2Server.make({
         binaryPath: effectiveConfig.binaryPath,
+        wrapperCommand: effectiveConfig.wrapperCommand,
         serverUrl: effectiveConfig.serverUrl,
         serverPassword: effectiveConfig.serverPassword,
         directory: host.paths.cwd,
